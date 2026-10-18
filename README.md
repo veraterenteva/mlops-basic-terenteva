@@ -1,14 +1,16 @@
 # mlops-basic-terenteva
-
+### Студентка - Терентьева Вера Васильевна
 Домашние задания по дисциплине **MLOps**.
 
 ## Структура репозитория
 
+Единственный uv-проект — `hw1/` (там же `pyproject.toml` и `uv.lock`).
+Корневых `pyproject.toml`/`uv.lock` нет намеренно, чтобы не держать два lock-файла.
+
 ```text
 .
 ├── README.md
-├── pyproject.toml
-├── hw1/                      # ДЗ1: uv + Ruff + ty
+├── hw1/                      # ДЗ1: uv + Ruff + ty (uv-проект)
 │   ├── .python-version
 │   ├── pyproject.toml
 │   ├── uv.lock
@@ -41,24 +43,19 @@ uv run python -m mlops_hw1
 
 ## ДЗ1: проверки
 
-Из папки `hw1`:
+Все команды выполняются из папки `hw1` — это единственный uv-проект в репозитории:
 
 ```bash
-uv run pytest
-uv run ruff check .
-uv run ruff format --check .
-uv run ty check
-```
-
-Либо из корня репозитория (корневой `pyproject.toml` — агрегатор проверок для `hw1`):
-
-```bash
+cd hw1
 uv sync
 uv run pytest
 uv run ruff check .
 uv run ruff format --check .
 uv run ty check
 ```
+
+Результат: `7 passed`, `All checks passed!`, `6 files already formatted`,
+`All checks passed!` (ty).
 
 ## ДЗ2: схема ветвления
 
