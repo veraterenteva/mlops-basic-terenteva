@@ -5,6 +5,13 @@
 [Ruff](https://docs.astral.sh/ruff/), проверка типов
 [ty](https://docs.astral.sh/ty/), тесты на pytest.
 
+## Функции пакета
+
+- `rms(values)` — среднеквадратичное значение (root mean square);
+- `mode(values)` — мода, самое частое значение (при равенстве — меньшее).
+
+Обе функции выбрасывают `ValueError` на пустом списке.
+
 ## Структура
 
 ```text
@@ -17,7 +24,7 @@ hw1/
 │       ├── __init__.py
 │       └── py.typed
 └── tests/
-    └── test_mean.py
+    └── test_stats.py
 ```
 
 ## Запуск
@@ -38,6 +45,6 @@ uv run ty check
 
 ## Результат
 
-- `pytest` — 3 теста проходят;
+- `pytest` — 7 тестов проходят;
 - `ruff check` / `ruff format --check` — без замечаний;
 - `ty check` — без ошибок типов.
