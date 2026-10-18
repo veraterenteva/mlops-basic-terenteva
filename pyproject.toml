@@ -1,0 +1,29 @@
+[project]
+name = "mlops-basic-terenteva"
+version = "0.2.0"
+description = "MLOps homeworks: uv project setup and Gitflow branching"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = []
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "ruff>=0.11",
+    "ty>=0.0.87",
+]
+
+[tool.ruff]
+line-length = 88
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.pytest.ini_options]
+pythonpath = ["hw1/src"]
+testpaths = ["hw1/tests"]
+
+[tool.ty.environment]
+python-version = "3.12"
+extra-paths = ["hw1/src"]
