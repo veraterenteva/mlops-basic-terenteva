@@ -57,8 +57,41 @@ uv run ty check
 Результат: `7 passed`, `All checks passed!`, `6 files already formatted`,
 `All checks passed!` (ty).
 
-## ДЗ2: схема ветвления
+## ДЗ2: Gitflow
 
 Подробный сценарий с командами и чек-лист — в [`hw2/README.md`](hw2/README.md).
-Кратко: `main` → `develop` → `feature/*` (PR) → `release/*` → тег `vX.Y.Z`,
-плюс `hotfix/*` из `main`.
+
+### План работы по Gitflow
+
+1. `develop` — постоянная ветка интеграции, создаётся от `main`.
+2. `feature/*` — по одной ветке на изменение, создаются от `develop`,
+   вливаются обратно в `develop` только через Pull Request.
+3. `release/*` — подготовка релиза от `develop`, вливается в `main` и `develop`,
+   на `main` ставится аннотированный тег `vX.Y.Z`.
+4. `hotfix/*` — срочные исправления от `main`, вливаются в `main` и `develop`
+   с новым тегом.
+
+### Что сделано в этом репозитории
+
+Ветки созданы и запушены в `origin`, в каждой есть коммит:
+
+| Ветка | Коммит | Назначение |
+| --- | --- | --- |
+| `main` | `81e9846` | стабильная ветка |
+| `develop` | `chore: init develop branch for gitflow` | интеграция изменений |
+| `feature/add-rms` | `feat: add rms function` | функциональность |
+| `feature/add-mode` | `feat: add mode function` | функциональность |
+| `release/0.2.0` | `chore(release): bump version to 0.2.0` | подготовка релиза |
+| `hotfix/0.2.1` | `fix: handle empty input` | срочное исправление |
+
+Pull Request'ы открываются из этих веток:
+
+| PR | Из | В | Ссылка на создание |
+| --- | --- | --- | --- |
+| 1 | `feature/add-rms` | `develop` | [открыть](https://github.com/veraterenteva/mlops-basic-terenteva/compare/develop...feature/add-rms?expand=1) |
+| 2 | `feature/add-mode` | `develop` | [открыть](https://github.com/veraterenteva/mlops-basic-terenteva/compare/develop...feature/add-mode?expand=1) |
+| 3 | `release/0.2.0` | `main` | [открыть](https://github.com/veraterenteva/mlops-basic-terenteva/compare/main...release/0.2.0?expand=1) |
+| 4 | `hotfix/0.2.1` | `main` | [открыть](https://github.com/veraterenteva/mlops-basic-terenteva/compare/main...hotfix/0.2.1?expand=1) |
+
+> Ветки и коммиты в них созданы намеренно минимальными: цель задания —
+> отработать сам процесс ветвления и Pull Request, а не добавить новую логику.
