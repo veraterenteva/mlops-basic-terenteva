@@ -84,14 +84,14 @@ uv run ty check
 | `release/0.2.0` | `chore(release): bump version to 0.2.0` | подготовка релиза |
 | `hotfix/0.2.1` | `fix: handle empty input` | срочное исправление |
 
-Pull Request'ы открываются из этих веток:
+Открытые Pull Request'ы:
 
-| PR | Из | В | Ссылка на создание |
+| PR | Из | В | Ссылка |
 | --- | --- | --- | --- |
-| 1 | `feature/add-rms` | `develop` | [открыть](https://github.com/veraterenteva/mlops-basic-terenteva/compare/develop...feature/add-rms?expand=1) |
-| 2 | `feature/add-mode` | `develop` | [открыть](https://github.com/veraterenteva/mlops-basic-terenteva/compare/develop...feature/add-mode?expand=1) |
-| 3 | `release/0.2.0` | `main` | [открыть](https://github.com/veraterenteva/mlops-basic-terenteva/compare/main...release/0.2.0?expand=1) |
-| 4 | `hotfix/0.2.1` | `main` | [открыть](https://github.com/veraterenteva/mlops-basic-terenteva/compare/main...hotfix/0.2.1?expand=1) |
+| #1 | `feature/add-rms` | `develop` | [#1](https://github.com/veraterenteva/mlops-basic-terenteva/pull/1) |
+| #2 | `feature/add-mode` | `develop` | [#2](https://github.com/veraterenteva/mlops-basic-terenteva/pull/2) |
+| #3 | `release/0.2.0` | `main` | [#3](https://github.com/veraterenteva/mlops-basic-terenteva/pull/3) |
+| #4 | `hotfix/0.2.1` | `main` | [#4](https://github.com/veraterenteva/mlops-basic-terenteva/pull/4) |
 
 > Ветки и коммиты в них созданы намеренно минимальными: цель задания —
 > отработать сам процесс ветвления и Pull Request, а не добавить новую логику.
