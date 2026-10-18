@@ -57,8 +57,41 @@ uv run ty check
 Результат: `7 passed`, `All checks passed!`, `6 files already formatted`,
 `All checks passed!` (ty).
 
-## ДЗ2: схема ветвления
+## ДЗ2: Gitflow
 
 Подробный сценарий с командами и чек-лист — в [`hw2/README.md`](hw2/README.md).
-Кратко: `main` → `develop` → `feature/*` (PR) → `release/*` → тег `vX.Y.Z`,
-плюс `hotfix/*` из `main`.
+
+### План работы по Gitflow
+
+1. `develop` — постоянная ветка интеграции, создаётся от `main`.
+2. `feature/*` — по одной ветке на изменение, создаются от `develop`,
+   вливаются обратно в `develop` только через Pull Request.
+3. `release/*` — подготовка релиза от `develop`, вливается в `main` и `develop`,
+   на `main` ставится аннотированный тег `vX.Y.Z`.
+4. `hotfix/*` — срочные исправления от `main`, вливаются в `main` и `develop`
+   с новым тегом.
+
+### Что сделано в этом репозитории
+
+Ветки созданы и запушены в `origin`, в каждой есть коммит:
+
+| Ветка | Коммит | Назначение |
+| --- | --- | --- |
+| `main` | `81e9846` | стабильная ветка |
+| `develop` | `chore: init develop branch for gitflow` | интеграция изменений |
+| `feature/add-rms` | `feat: add rms function` | функциональность |
+| `feature/add-mode` | `feat: add mode function` | функциональность |
+| `release/0.2.0` | `chore(release): bump version to 0.2.0` | подготовка релиза |
+| `hotfix/0.2.1` | `fix: handle empty input` | срочное исправление |
+
+Открытые Pull Request'ы:
+
+| PR | Из | В | Ссылка |
+| --- | --- | --- | --- |
+| #1 | `feature/add-rms` | `develop` | [#1](https://github.com/veraterenteva/mlops-basic-terenteva/pull/1) |
+| #2 | `feature/add-mode` | `develop` | [#2](https://github.com/veraterenteva/mlops-basic-terenteva/pull/2) |
+| #3 | `release/0.2.0` | `main` | [#3](https://github.com/veraterenteva/mlops-basic-terenteva/pull/3) |
+| #4 | `hotfix/0.2.1` | `main` | [#4](https://github.com/veraterenteva/mlops-basic-terenteva/pull/4) |
+
+> Ветки и коммиты в них созданы намеренно минимальными: цель задания —
+> отработать сам процесс ветвления и Pull Request, а не добавить новую логику.
