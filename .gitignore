@@ -15,6 +15,16 @@ wheels/
 .ruff_cache/
 .ty_cache/
 
+# Coverage artefacts
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+
+# DVC: data artefacts are tracked by DVC, not by git
+/data/*
+!/data/.gitignore
+
 # OS / editor
 .idea/
 .vscode/

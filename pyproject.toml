@@ -1,0 +1,56 @@
+[project]
+name = "mlops-basic-terenteva"
+version = "0.3.0"
+description = "MLOps homeworks: uv project setup, Gitflow, DVC pipeline and tests"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "pyyaml>=6.0",
+]
+
+[build-system]
+requires = ["uv_build>=0.11.26,<0.12.0"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-name = "mlops"
+module-root = "src"
+
+[dependency-groups]
+dev = [
+    "dvc>=3.50",
+    "pytest>=8.3",
+    "pytest-cov>=5.0",
+    "ruff>=0.11",
+    "ty>=0.0.87",
+]
+
+[tool.ruff]
+line-length = 88
+target-version = "py312"
+extend-exclude = [".dvc"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "--cov=mlops --cov-report=term-missing --cov-fail-under=85"
+markers = [
+    "unit: fast tests of a single function or class",
+    "integration: several pipeline stages working together",
+    "e2e: full pipeline run through the command line interface",
+]
+
+[tool.coverage.run]
+source = ["mlops"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "if __name__ == .__main__.:",
+    "raise NotImplementedError",
+]
+
+[tool.ty.environment]
+python-version = "3.12"
+extra-paths = ["hw1/src"]

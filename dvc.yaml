@@ -1,0 +1,55 @@
+stages:
+  generate:
+    cmd: uv run python -m mlops.cli generate
+    deps:
+      - src/mlops/generate.py
+      - src/mlops/config.py
+    params:
+      - params.yaml:
+          - seed
+          - n_samples
+          - n_features
+          - noise
+    outs:
+      - data/raw.csv
+
+  prepare:
+    cmd: uv run python -m mlops.cli prepare
+    deps:
+      - src/mlops/data.py
+      - src/mlops/config.py
+      - data/raw.csv
+    params:
+      - params.yaml:
+          - seed
+          - test_size
+    outs:
+      - data/train.csv
+      - data/test.csv
+      - data/scaler.json
+
+  train:
+    cmd: uv run python -m mlops.cli train
+    deps:
+      - src/mlops/train.py
+      - src/mlops/model.py
+      - src/mlops/blocks.py
+      - src/mlops/data.py
+      - data/train.csv
+    params:
+      - params.yaml:
+          - ridge_alpha
+    outs:
+      - data/model.json
+
+  evaluate:
+    cmd: uv run python -m mlops.cli evaluate
+    deps:
+      - src/mlops/evaluate.py
+      - src/mlops/metrics.py
+      - src/mlops/model.py
+      - data/test.csv
+      - data/model.json
+    metrics:
+      - data/metrics.json:
+          cache: false

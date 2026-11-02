@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+.ty_cache/
+
+# Project documentation is not pipeline input
+hw1/
+hw2/
+hw3/
+hw4/
+docs/
+
+# Tests are not pipeline input either
+tests/
+
+# Coverage artefacts
+.coverage
+coverage.xml
+htmlcov/

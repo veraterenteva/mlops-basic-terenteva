@@ -1,0 +1,115 @@
+schema: '2.0'
+stages:
+  generate:
+    cmd: uv run python -m mlops.cli generate
+    deps:
+    - path: src/mlops/config.py
+      hash: md5
+      md5: 5675cbc61246cac7f8b0c4a07a26ec0f
+      size: 2393
+    - path: src/mlops/generate.py
+      hash: md5
+      md5: f407db94199aaef97f48b89e82fb61fc
+      size: 2285
+    params:
+      params.yaml:
+        n_features: 3
+        n_samples: 200
+        noise: 0.5
+        seed: 42
+    outs:
+    - path: data/raw.csv
+      hash: md5
+      md5: 728f38a9fff1d115f3c35cf739aee1e2
+      size: 15467
+  prepare:
+    cmd: uv run python -m mlops.cli prepare
+    deps:
+    - path: data/raw.csv
+      hash: md5
+      md5: 728f38a9fff1d115f3c35cf739aee1e2
+      size: 15467
+    - path: src/mlops/config.py
+      hash: md5
+      md5: 5675cbc61246cac7f8b0c4a07a26ec0f
+      size: 2393
+    - path: src/mlops/data.py
+      hash: md5
+      md5: cdcfd6b5c8e978bff6aeb306eef389a0
+      size: 7781
+    params:
+      params.yaml:
+        seed: 42
+        test_size: 0.2
+    outs:
+    - path: data/scaler.json
+      hash: md5
+      md5: 314b282af7bd835c48505cbb39789fdc
+      size: 193
+    - path: data/test.csv
+      hash: md5
+      md5: 5b385737b2e11f74a0aed16ef3b3fced
+      size: 3158
+    - path: data/train.csv
+      hash: md5
+      md5: e268033ee1d71c09f06a1710b61422b9
+      size: 12559
+  train:
+    cmd: uv run python -m mlops.cli train
+    deps:
+    - path: data/train.csv
+      hash: md5
+      md5: e268033ee1d71c09f06a1710b61422b9
+      size: 12559
+    - path: src/mlops/blocks.py
+      hash: md5
+      md5: 65af9589552da9f320252c74e651edb0
+      size: 2713
+    - path: src/mlops/data.py
+      hash: md5
+      md5: cdcfd6b5c8e978bff6aeb306eef389a0
+      size: 7781
+    - path: src/mlops/model.py
+      hash: md5
+      md5: ee44e8097473066013f1cd90efe9dc3f
+      size: 4038
+    - path: src/mlops/train.py
+      hash: md5
+      md5: 978f2821cedd17ead2736d348a54385d
+      size: 517
+    params:
+      params.yaml:
+        ridge_alpha: 1e-06
+    outs:
+    - path: data/model.json
+      hash: md5
+      md5: ef7cc71198df287063867b37d1253bbe
+      size: 154
+  evaluate:
+    cmd: uv run python -m mlops.cli evaluate
+    deps:
+    - path: data/model.json
+      hash: md5
+      md5: ef7cc71198df287063867b37d1253bbe
+      size: 154
+    - path: data/test.csv
+      hash: md5
+      md5: 5b385737b2e11f74a0aed16ef3b3fced
+      size: 3158
+    - path: src/mlops/evaluate.py
+      hash: md5
+      md5: 60a3cbda4ab840c493519b83c520185e
+      size: 738
+    - path: src/mlops/metrics.py
+      hash: md5
+      md5: 4962bdf3078711d63c8c215f7cfaf2de
+      size: 1872
+    - path: src/mlops/model.py
+      hash: md5
+      md5: ee44e8097473066013f1cd90efe9dc3f
+      size: 4038
+    outs:
+    - path: data/metrics.json
+      hash: md5
+      md5: 172d06c45a0dff6bcdd3c27d488612f6
+      size: 120
