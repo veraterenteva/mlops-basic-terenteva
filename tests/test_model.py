@@ -1,19 +1,20 @@
 """Unit tests for the ridge regression model.
 
-Block under test
-----------------
-``mlops.model.RidgeRegression`` — ядро пайплайна. Реализован вручную
-через нормальные уравнения ``(X^T X + alpha * I) w = X^T y`` и решатель
-из ``mlops.blocks``. Здесь проверяется и математика, и контракт API.
+Block under test: ``mlops.model.RidgeRegression``
 
-Requirements
-------------
-1. Модель восстанавливает истинные коэффициенты на чистых данных.
-2. На данных с шумом ошибка остаётся в разумных пределах.
-3. ``predict`` и ``predict_one`` согласованы между собой.
-4. До ``fit`` модель непригодна к использованию и сообщает об этом.
-5. Некорректные размеры и отрицательный ``alpha`` отвергаются.
-6. Сериализация в JSON сохраняет веса и свободный член.
+This is the core of the pipeline. It is implemented by hand with the
+normal equations ``(X^T X + alpha * I) w = X^T y`` solved by the
+``mlops.blocks`` solver, so both the mathematics and the API contract are
+verified here.
+
+What is verified
+
+R1. The model recovers the true coefficients on noise-free data.
+R2. On noisy data the prediction error stays within a sane bound.
+R3. ``predict`` and ``predict_one`` agree with each other.
+R4. The model is unusable before ``fit`` and says so explicitly.
+R5. Wrong shapes and a negative ``alpha`` are rejected.
+R6. JSON serialisation preserves the weights and the intercept.
 """
 
 import pytest
@@ -21,20 +22,22 @@ import pytest
 from mlops.generate import TRUE_WEIGHTS
 from mlops.model import RidgeRegression, load_model, save_model
 
-# --- Блок: обучение --------------------------------------------------------
-# Требование: на данных без шума модель обязана найти истинные веса.
-# При alpha = 0 это точное решение МНК; при заметной alpha веса слегка
-# смещаются к нулю — это ожидаемая регуляризация, а не ошибка.
+# Training
+# R1 and R2. On noise-free data the model must find the generating
+# coefficients. With alpha = 0 this is the exact least-squares solution;
+# with a noticeable alpha the weights shrink slightly towards zero, which is
+# the intended regularisation rather than an error.
 
 
 @pytest.mark.unit
 @pytest.mark.parametrize(
     ("alpha", "tolerance"),
     [
-        # Без штрафа замкнутая формула воспроизводит истину точно.
+        # No penalty: the closed-form solution reproduces the truth exactly.
         (0.0, 1e-6),
+        # A negligible penalty keeps the same accuracy.
         (1e-9, 1e-6),
-        # Заметный штраф сжимает веса, поэтому допуск шире.
+        # A visible penalty shrinks the weights, so the tolerance is wider.
         (1e-3, 5e-3),
     ],
 )
@@ -51,16 +54,16 @@ def test_model_recovers_true_weights(alpha: float, tolerance: float) -> None:
 
 @pytest.mark.unit
 def test_model_fits_noisy_data(trained_model: RidgeRegression, splits) -> None:
-    # Требование: на train-части с шумом 0.5 ошибка каждой точки < 1.0.
-    # Порог не «магический»: он отражает шум генератора.
+    # R2: the generator adds noise with sigma = 0.5, so a per-point error
+    # below 1.0 means the model captured the signal and not the noise.
     predictions = trained_model.predict(splits.train.features)
     expected = splits.train.targets
     errors = [abs(a - b) for a, b in zip(expected, predictions, strict=True)]
     assert max(errors) < 1.0
 
 
-# --- Блок: предсказание ----------------------------------------------------
-# Требование: батчевый и одиночный интерфейсы дают одно и то же.
+# Prediction
+# R3: the batch and the single-row interfaces must produce identical values.
 
 
 @pytest.mark.unit
@@ -70,9 +73,9 @@ def test_predict_one_matches_predict(trained_model: RidgeRegression, splits) -> 
     assert batch == pytest.approx(single)
 
 
-# --- Контракт и валидация --------------------------------------------------
-# Требование: необученная модель и неверные размеры дают понятные ошибки,
-# а не тихий мусор в предсказаниях.
+# Contract and validation
+# R4 and R5: an unfitted model and wrong shapes must raise clear errors
+# instead of returning garbage predictions.
 
 
 @pytest.mark.unit
@@ -83,7 +86,7 @@ def test_predict_without_fit_raises() -> None:
 
 @pytest.mark.unit
 def test_predict_rejects_wrong_feature_count(trained_model: RidgeRegression) -> None:
-    # Модель обучена на 3 признаках, вектор из одного — ошибка.
+    # The model was fitted on three features; a one-element vector is wrong.
     with pytest.raises(ValueError, match="does not match the model"):
         trained_model.predict_one([1.0])
 
@@ -96,7 +99,7 @@ def test_fit_rejects_wrong_target_count() -> None:
 
 @pytest.mark.unit
 def test_fit_rejects_negative_alpha() -> None:
-    # Отрицательный штраф сделал бы матрицу не положительно определённой.
+    # A negative penalty would make the Gram matrix non positive-definite.
     with pytest.raises(ValueError, match="non-negative"):
         RidgeRegression(alpha=-1.0).fit([[1.0]], [1.0])
 
@@ -115,14 +118,14 @@ def test_fit_rejects_empty_feature_vector() -> None:
 
 @pytest.mark.unit
 def test_fit_rejects_ragged_features() -> None:
-    # «Рваные» строки разной длины не должны проходить в матрицу Грама.
+    # Rows of different length cannot be assembled into a Gram matrix.
     with pytest.raises(ValueError, match="same length"):
         RidgeRegression().fit([[1.0, 2.0], [1.0]], [1.0, 2.0])
 
 
-# --- Блок: сериализация ----------------------------------------------------
-# Требование: модель переживает сохранение в JSON и чтение обратно,
-# иначе стадии train и evaluate не смогут обменяться артефактом.
+# Serialisation
+# R6: the train and evaluate stages exchange the model through a JSON file,
+# so a lossy round trip would silently change the reported metrics.
 
 
 @pytest.mark.unit
@@ -142,7 +145,7 @@ def test_load_model_missing_file(tmp_path) -> None:
 
 @pytest.mark.unit
 def test_from_dict_rejects_bad_weights() -> None:
-    # Требование: битый артефакт не должен давать «модель без весов».
+    # R6: a corrupted artefact must not become a model without weights.
     with pytest.raises(ValueError, match="weights must be a list"):
         RidgeRegression.from_dict({"alpha": 1.0, "intercept": 0.0, "weights": "bad"})
 

@@ -1,20 +1,23 @@
 """Shared fixtures for the pipeline tests.
 
-Design notes
-------------
-Фикстуры выстроены в цепочку зависимостей: ``params`` -> ``raw_csv`` ->
-``dataset`` -> ``clean_dataset`` -> ``splits`` -> ``trained_model``.
-Каждый тест берёт только нужное звено, поэтому подготовка данных
-не дублируется, а тесты остаются независимыми.
+How the fixtures fit together
 
-Все фикстуры работают во временных каталогах (``tmp_path``), поэтому
-прогон не зависит от содержимого рабочей папки и не оставляет мусора.
+They form a dependency chain:
 
-Requirement for the whole suite
--------------------------------
-Тесты не должны ходить в сеть, зависеть от текущей даты или от файлов вне
-``tmp_path``. ``params`` специально уменьшает ``n_samples`` до 40, чтобы
-набор из 100+ тестов проходил за секунды.
+    params -> raw_csv -> dataset -> clean_dataset -> splits -> trained_model
+
+A test asks only for the link it needs, so the data preparation is written
+once and every test still starts from a well-defined state.
+
+Two rules apply to the whole suite:
+
+1. Everything runs inside ``tmp_path``. No test reads the working
+   directory, writes outside it, or depends on leftovers from a previous
+   run.
+2. No network access and no dependence on the current date.
+
+``params`` deliberately shrinks ``n_samples`` to 40 and sets ``noise`` to
+0.0, which keeps the 100+ tests fast and makes accuracy assertions exact.
 """
 
 import csv
@@ -36,14 +39,14 @@ from mlops.data import (
 from mlops.generate import generate_dataset
 from mlops.model import RidgeRegression, save_model
 
-# --- Параметры -------------------------------------------------------------
-# Требование: маленький, но валидный набор параметров, чтобы тесты
-# были быстрыми. noise=0.0 упрощает проверки точности модели.
+# Parameters
+# A small but valid parameter set. ``noise=0.0`` removes randomness from the
+# target, so tests that check model accuracy do not need loose tolerances.
 
 
 @pytest.fixture
 def params(tmp_path: Path) -> Params:
-    """Параметры пайплайна с уменьшенным числом строк и без шума."""
+    """Pipeline parameters with fewer rows and no noise."""
     return {
         **DEFAULT_PARAMS,
         "n_samples": 40,
@@ -53,52 +56,53 @@ def params(tmp_path: Path) -> Params:
 
 @pytest.fixture
 def params_file(tmp_path: Path, params: Params) -> Path:
-    """``params.yaml`` на диске — нужен тестам, которые читают конфиг."""
+    """``params.yaml`` on disk, for tests that read the configuration."""
     path = tmp_path / "params.yaml"
     lines = [f"{key}: {value}" for key, value in params.items()]
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     return path
 
 
-# --- Данные ----------------------------------------------------------------
-# Цепочка: сырой CSV -> Dataset -> очищенный -> сплиты -> обученная модель.
-# Такая декомпозиция позволяет тестировать каждый блок на своём уровне
-# и переиспользовать подготовку без копипасты.
+# Data
+# The chain that turns a raw CSV into a trained model. Splitting it into
+# separate fixtures lets each block be tested at its own level without
+# duplicating the preparation code.
 
 
 @pytest.fixture
 def raw_csv(tmp_path: Path, params: Params) -> Path:
-    """Реальный CSV, созданный настоящей стадией генерации.
+    """A real CSV written by the real generate stage.
 
-    Не мок: тесты работают с тем же форматом, что и пайплайн.
+    This is not a mock: the tests consume exactly the format that the
+    pipeline produces.
     """
     return generate_dataset(params, tmp_path / "data" / "raw.csv")
 
 
 @pytest.fixture
 def dataset(raw_csv: Path) -> Dataset:
-    """Датасет, прочитанный из сгенерированного CSV."""
+    """The generated CSV loaded into a ``Dataset``."""
     return load_csv(raw_csv)
 
 
 @pytest.fixture
 def clean_dataset(dataset: Dataset) -> Dataset:
-    """Очищенный датасет — вход для сплита и скейлера."""
+    """Cleaned dataset, the input for splitting and scaling."""
     return clean(dataset)
 
 
 @pytest.fixture
 def splits(clean_dataset: Dataset) -> Splits:
-    """Train/test разбиение с фиксированным seed для воспроизводимости."""
+    """A train/test split with a fixed seed, therefore reproducible."""
     return train_test_split(clean_dataset, test_size=0.25, seed=7)
 
 
 @pytest.fixture
 def scaled_splits(splits: Splits) -> tuple[Splits, StandardScaler]:
-    """Масштабированные сплиты вместе со скейлером.
+    """Scaled splits together with the scaler that produced them.
 
-    Скейлер возвращается отдельно, потому что часть тестов проверяет
-    его статистики, а часть — только преобразованные данные.
+    The scaler is returned separately because some tests assert on its
+    statistics while others only need the transformed data.
     """
     scaler = StandardScaler.fit(splits.train)
     scaled = Splits(
@@ -108,17 +112,17 @@ def scaled_splits(splits: Splits) -> tuple[Splits, StandardScaler]:
     return scaled, scaler
 
 
-# --- Модель ----------------------------------------------------------------
-# Требование: обученная модель и её файловое представление доступны
-# как отдельные фикстуры, чтобы не переобучать модель в каждом тесте.
+# Model
+# A trained model is expensive relative to the rest of a test, so it is
+# built once and shared through fixtures instead of being refitted.
 
 
 @pytest.fixture
 def trained_model(splits: Splits) -> RidgeRegression:
-    """Модель, обученная на train-части.
+    """A model fitted on the train split.
 
-    ``alpha`` почти нулевая: тесты проверяют математику решения,
-    а не эффект регуляризации (для неё есть отдельный тест).
+    ``alpha`` is almost zero here: these tests probe the mathematics of the
+    closed-form solution. Regularisation has its own dedicated test.
     """
     model = RidgeRegression(alpha=1e-9)
     return model.fit(splits.train.features, splits.train.targets)
@@ -126,23 +130,23 @@ def trained_model(splits: Splits) -> RidgeRegression:
 
 @pytest.fixture
 def model_file(tmp_path: Path, trained_model: RidgeRegression) -> Path:
-    """Обученная модель, сохранённая в JSON."""
+    """The trained model persisted as JSON."""
     path = tmp_path / "model.json"
     save_model(path, trained_model)
     return path
 
 
-# --- Пайплайн --------------------------------------------------------------
-# Требование: готовый рабочий каталог, чтобы e2e и интеграционные тесты
-# запускали CLI и стадии без ручной подготовки файлов.
+# Pipeline working directory
+# Integration and end-to-end tests drive the stages and the CLI, so they
+# need a ready directory that already contains ``params.yaml``.
 
 
 @pytest.fixture
 def pipeline_root(tmp_path: Path, params: Params) -> Path:
-    """Каталог, в котором уже лежит ``params.yaml``.
+    """A directory containing ``params.yaml`` and nothing else.
 
-    Именно этот путь передаётся в ``--root`` при запуске CLI, поэтому
-    все артефакты появляются внутри ``tmp_path`` и не засоряют репозиторий.
+    This path is passed to ``--root``, so every artefact is created inside
+    ``tmp_path`` and the repository is never polluted.
     """
     root = tmp_path / "pipeline"
     root.mkdir()
@@ -151,22 +155,22 @@ def pipeline_root(tmp_path: Path, params: Params) -> Path:
     return root
 
 
-# --- Фабрика данных для негативных тестов ---------------------------------
-# Требование: возможность собрать произвольный «плохой» CSV прямо в тесте,
-# не заводя отдельный файл-фикстуру на каждый случай.
+# Data factory for negative tests
+# Negative tests need malformed CSV files: no target column, a short row, a
+# header-only file. A factory fixture builds each variant on the spot
+# instead of shipping one static file per case.
 
 
 @pytest.fixture
 def csv_writer() -> Callable[[Path, list[str], list[list[Any]]], Path]:
-    """Фабрика: пишет CSV с произвольным заголовком и строками.
+    """Factory that writes a CSV with an arbitrary header and rows.
 
-    Возвращает функцию, а не путь, потому что негативным тестам нужны
-    разные варианты файла (без целевой колонки, с короткой строкой,
-    только с заголовком).
+    A function is returned rather than a path because each negative test
+    needs a different malformed file.
     """
 
     def write(path: Path, header: list[str], rows: list[list[Any]]) -> Path:
-        """Записать ``rows`` с заголовком ``header`` и вернуть путь."""
+        """Write ``rows`` under ``header`` and return the path."""
         path.parent.mkdir(parents=True, exist_ok=True)
         with path.open("w", encoding="utf-8", newline="") as handle:
             writer = csv.writer(handle)

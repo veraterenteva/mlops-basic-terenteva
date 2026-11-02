@@ -1,24 +1,25 @@
 """Unit tests for the data block: loading, cleaning, splitting, scaling.
 
-Block under test
-----------------
-``mlops.data`` — слой данных. Он стоит между генератором и моделью:
-читает CSV, вычищает мусор, делит выборку и масштабирует признаки.
-Ошибка здесь незаметна для модели, но портит и обучение, и метрики,
-поэтому блок проверяется особенно подробно.
+Block under test: ``mlops.data``
 
-Requirements
-------------
-1. ``load_csv`` разбирает заголовок, отделяет целевую колонку и
-   сообщает об ошибках формата (нет файла, нет колонки, короткая строка,
-   файл только с заголовком).
-2. ``clean`` убирает дубликаты и NaN-строки, но не «съедает» датасет
-   целиком: полностью пустой результат — ошибка.
-3. ``train_test_split`` детерминирован при одном seed, меняется при
-   другом, сохраняет общее число строк и корректно считает размер теста.
-4. ``StandardScaler`` даёт нулевое среднее и единичную дисперсию,
-   не падает на константном столбце, проверяет число признаков и
-   переживает сериализацию в JSON.
+This layer sits between the generator and the model. It reads the CSV,
+removes garbage, splits the dataset and standardises the features. A
+mistake here is invisible at runtime but corrupts both training and
+evaluation, which is why it gets the most detailed coverage.
+
+What is verified
+
+R1. ``load_csv`` parses the header, separates the target column and reports
+    every malformed file shape (no file, no target column, a short row,
+    a header-only file).
+R2. ``clean`` drops duplicates and NaN rows but refuses to return an empty
+    dataset, because an empty result would hide the real problem.
+R3. ``train_test_split`` is deterministic for a fixed seed, changes for a
+    different seed, preserves the total row count and computes the test
+    size as round(n * test_size) with a minimum of one row.
+R4. ``StandardScaler`` produces zero mean and unit variance, survives a
+    constant column without dividing by zero, rejects a mismatched feature
+    count and round-trips through JSON without losing its statistics.
 """
 
 import pytest
@@ -34,13 +35,14 @@ from mlops.data import (
     write_dataset,
 )
 
-# --- Блок: load_csv --------------------------------------------------------
-# Требование: корректный разбор файла, который создаёт стадия generate.
+# Loading CSV
+# R1: parse the file produced by the generate stage.
 
 
 @pytest.mark.unit
 def test_load_csv_reads_generated_file(dataset: Dataset) -> None:
-    # Датасет из фикстуры: 40 строк, 3 признака, имена f0..f2 из заголовка.
+    # The fixture dataset holds 40 rows with three features named f0..f2,
+    # taken from the CSV header.
     assert len(dataset) == 40
     assert dataset.n_features == 3
     assert dataset.feature_names == ["f0", "f1", "f2"]
@@ -48,14 +50,16 @@ def test_load_csv_reads_generated_file(dataset: Dataset) -> None:
 
 @pytest.mark.unit
 def test_load_csv_missing_file(tmp_path) -> None:
-    # Требование: отсутствующий файл — FileNotFoundError, а не пустой датасет.
+    # R1: a missing file must raise instead of producing an empty dataset
+    # that would fail much later inside the model.
     with pytest.raises(FileNotFoundError):
         load_csv(tmp_path / "missing.csv")
 
 
 @pytest.mark.unit
 def test_load_csv_rejects_unknown_target(tmp_path, csv_writer) -> None:
-    # Требование: если целевой колонки нет, обучение бессмысленно — ошибка.
+    # R1: if the target column does not exist there is nothing to learn
+    # from, so the loader stops immediately.
     path = csv_writer(tmp_path / "x.csv", ["f0", "y"], [[1.0, 2.0]])
     with pytest.raises(ValueError, match="target column not found"):
         load_csv(path, target_column="target")
@@ -63,8 +67,8 @@ def test_load_csv_rejects_unknown_target(tmp_path, csv_writer) -> None:
 
 @pytest.mark.unit
 def test_load_csv_rejects_short_row(tmp_path, csv_writer) -> None:
-    # Требование: битая строка не должна молча превращаться в строку
-    # с другим числом признаков — сообщение содержит номер и ожидание.
+    # R1: a truncated row must not silently become a row with a different
+    # number of features. The message names the expectation.
     path = csv_writer(tmp_path / "x.csv", ["f0", "target"], [[1.0]])
     with pytest.raises(ValueError, match="expected 2"):
         load_csv(path)
@@ -72,19 +76,19 @@ def test_load_csv_rejects_short_row(tmp_path, csv_writer) -> None:
 
 @pytest.mark.unit
 def test_load_csv_rejects_header_only(tmp_path, csv_writer) -> None:
-    # Требование: пустая таблица бесполезна для обучения.
+    # R1: a table without data rows is useless for training.
     path = csv_writer(tmp_path / "x.csv", ["f0", "target"], [])
     with pytest.raises(ValueError, match="at least one row"):
         load_csv(path)
 
 
-# --- Блок: clean -----------------------------------------------------------
-# Требование: убрать шум, но не скрыть проблему полного опустошения.
+# Cleaning
+# R2: remove noise, but never hide the fact that everything was removed.
 
 
 @pytest.mark.unit
 def test_clean_removes_duplicates() -> None:
-    # Две одинаковые строки -> остаётся одна, уникальная сохраняется.
+    # Two identical rows collapse into one; the unique row is kept.
     dataset = Dataset(
         features=[[1.0], [1.0], [2.0]],
         targets=[1.0, 1.0, 2.0],
@@ -96,7 +100,7 @@ def test_clean_removes_duplicates() -> None:
 
 @pytest.mark.unit
 def test_clean_removes_nan_rows() -> None:
-    # Требование: строка с NaN выкидывается, остальные не затрагиваются.
+    # R2: the row containing NaN is dropped and the valid row is untouched.
     dataset = Dataset(
         features=[[float("nan")], [2.0]],
         targets=[1.0, 2.0],
@@ -115,8 +119,8 @@ def test_clean_rejects_empty_dataset() -> None:
 
 @pytest.mark.unit
 def test_clean_rejects_all_rows_dropped() -> None:
-    # Требование: нельзя вернуть пустой датасет — лучше явная ошибка,
-    # иначе следующая стадия упадёт с непонятным сообщением.
+    # R2: if cleaning removes every row the function must fail here, not
+    # let the next stage crash with an unrelated error.
     dataset = Dataset(
         features=[[float("nan")]],
         targets=[1.0],
@@ -126,21 +130,22 @@ def test_clean_rejects_all_rows_dropped() -> None:
         clean(dataset)
 
 
-# --- Блок: train_test_split -----------------------------------------------
-# Требование: воспроизводимое разбиение с контролем размера теста.
+# Splitting
+# R3: a reproducible split with a predictable test size.
 
 
 @pytest.mark.unit
 @pytest.mark.parametrize("test_size", [0.0, 1.0, -0.1, 1.5])
 def test_split_rejects_bad_test_size(clean_dataset: Dataset, test_size: float) -> None:
-    # Границы: 0 и 1 недопустимы, отрицательное и >1 тоже.
+    # Boundaries are exclusive: 0 and 1 are invalid, so are negative values
+    # and anything above one.
     with pytest.raises(ValueError, match="between 0 and 1"):
         train_test_split(clean_dataset, test_size=test_size, seed=1)
 
 
 @pytest.mark.unit
 def test_split_rejects_single_row() -> None:
-    # Одну строку нельзя разделить на две части.
+    # A single row cannot fill both sides of the split.
     dataset = Dataset(features=[[1.0]], targets=[1.0], feature_names=["f0"])
     with pytest.raises(ValueError, match="at least two rows"):
         train_test_split(dataset, test_size=0.5, seed=1)
@@ -149,8 +154,8 @@ def test_split_rejects_single_row() -> None:
 @pytest.mark.unit
 @pytest.mark.parametrize("test_size", [0.1, 0.25, 0.5])
 def test_split_sizes(clean_dataset: Dataset, test_size: float) -> None:
-    # Требование: строки не теряются и не дублируются,
-    # размер теста считается как round(n * test_size), но не меньше 1.
+    # R3: no row is lost or duplicated, and the test part is
+    # round(n * test_size), never smaller than one row.
     splits = train_test_split(clean_dataset, test_size=test_size, seed=3)
     total = len(splits.train) + len(splits.test)
     assert total == len(clean_dataset)
@@ -159,7 +164,8 @@ def test_split_sizes(clean_dataset: Dataset, test_size: float) -> None:
 
 @pytest.mark.unit
 def test_split_is_deterministic(clean_dataset: Dataset) -> None:
-    # Требование: один seed -> одинаковое разбиение (нужно для DVC).
+    # R3: the same seed produces the same split, which is what makes the
+    # DVC pipeline reproducible.
     first = train_test_split(clean_dataset, test_size=0.25, seed=5)
     second = train_test_split(clean_dataset, test_size=0.25, seed=5)
     assert first.train.features == second.train.features
@@ -168,20 +174,21 @@ def test_split_is_deterministic(clean_dataset: Dataset) -> None:
 
 @pytest.mark.unit
 def test_split_differs_for_different_seeds(clean_dataset: Dataset) -> None:
-    # Требование: seed действительно влияет, а не игнорируется.
+    # R3: the seed must actually be used, not ignored.
     first = train_test_split(clean_dataset, test_size=0.25, seed=5)
     second = train_test_split(clean_dataset, test_size=0.25, seed=6)
     assert first.train.features != second.train.features
 
 
-# --- Блок: StandardScaler -------------------------------------------------
-# Требование: масштабирование по статистикам train-части, применяемое
-# затем к тесту без утечки данных.
+# Scaling
+# R4: fit on the train split, then apply the same statistics everywhere.
+# Fitting on the full dataset would leak test information into training.
 
 
 @pytest.mark.unit
 def test_scaler_fit_produces_zero_mean_unit_std(splits) -> None:
-    # Главное свойство скейлера: после transform среднее 0, дисперсия 1.
+    # The defining property: after transform the mean is 0 and the
+    # variance is 1 for every feature.
     scaler = StandardScaler.fit(splits.train)
     scaled = scaler.transform(splits.train)
     for column in range(scaled.n_features):
@@ -194,8 +201,8 @@ def test_scaler_fit_produces_zero_mean_unit_std(splits) -> None:
 
 @pytest.mark.unit
 def test_scaler_handles_constant_column() -> None:
-    # Требование: константный признак не должен давать деление на ноль;
-    # std подменяется на 1.0, а значения вырождаются в нули.
+    # R4: a constant feature has zero standard deviation. Dividing by it
+    # would raise, so the scaler substitutes 1.0 and every value becomes 0.
     dataset = Dataset(
         features=[[5.0, 1.0], [5.0, 2.0], [5.0, 3.0]],
         targets=[0.0, 1.0, 2.0],
@@ -215,8 +222,8 @@ def test_scaler_rejects_empty_dataset() -> None:
 
 @pytest.mark.unit
 def test_scaler_rejects_feature_mismatch(splits) -> None:
-    # Требование: нельзя применить скейлер с другим числом признаков —
-    # это признак перепутанных артефактов из DVC-кэша.
+    # R4: applying a scaler with a different number of features means the
+    # artefacts came from different runs, which must not go unnoticed.
     scaler = StandardScaler(means=[0.0], stds=[1.0])
     with pytest.raises(ValueError, match="does not match the scaler"):
         scaler.transform(splits.train)
@@ -224,8 +231,8 @@ def test_scaler_rejects_feature_mismatch(splits) -> None:
 
 @pytest.mark.unit
 def test_scaler_roundtrip(tmp_path, splits) -> None:
-    # Требование: сохранение и чтение JSON не искажает статистики,
-    # иначе train и evaluate разойдутся.
+    # R4: save and load must preserve the statistics exactly, otherwise the
+    # train and evaluate stages would disagree about the scaling.
     scaler = StandardScaler.fit(splits.train)
     path = tmp_path / "scaler.json"
     save_scaler(path, scaler)
@@ -242,13 +249,13 @@ def test_load_scaler_missing_file(tmp_path) -> None:
 
 @pytest.mark.unit
 def test_scaler_from_dict_validates_length() -> None:
-    # Требование: битый JSON не должен давать скейлер с «рваными» списками.
+    # R4: a corrupted JSON file must not produce a scaler with ragged lists.
     with pytest.raises(ValueError, match="same length"):
         StandardScaler.from_dict({"means": [0.0, 1.0], "stds": [1.0]})
 
 
-# --- Блок: write_dataset ---------------------------------------------------
-# Требование: записанный датасет читается обратно без потерь.
+# Writing CSV
+# R1 in reverse: what the pipeline writes must be readable by the pipeline.
 
 
 @pytest.mark.unit
